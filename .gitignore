@@ -1,6 +1,9 @@
 # pipeline.conf
 *.conf
 
+# code_tips personal
+code_tips
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

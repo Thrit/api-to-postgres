@@ -6,6 +6,7 @@ def check_dataframe(df: 'pd.DataFrame') -> bool:
     if df.empty:
         print('Dataframe is empty. Stop running')
         return False
+        exit(-1)
 
     return True
 
