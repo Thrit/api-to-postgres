@@ -9,12 +9,16 @@ from sqlalchemy import create_engine
 from modules.tests import *
 
 
-def get_parser(parser: 'Object') -> 'Object':
+def get_parser() -> 'Object':
     return configparser.ConfigParser()
 
 
-def get_client_rds(client: 'Object') -> 'Object':
-    return boto3.client('rds')
+def get_client_rds(service: str, access_key: str, secret_key: str) -> 'Object':
+    return boto3.client(
+        service,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key
+    )
 
 
 def get_data_from_api(
@@ -22,10 +26,9 @@ def get_data_from_api(
         key: str,
 ):
     """
-    Function that extracts data from a given API
-    :param url: URL to connect to an API
-    :param key: Token given by an API
-    :return:
+    Extracts data from the given coinmarket API
+    :param url: URL to connect to the API
+    :param key: Token given by the API
     """
 
     parser = get_parser()
@@ -104,31 +107,43 @@ def get_data_from_api(
 
     except:
         print('Error to access API')
-        exit(1)
+        exit(-1)
 
     df_crypto = pd.DataFrame(cripto_dict, columns=crypto_columns)
 
     run_instance_rds(db_instance_identifier=parser.get('aws_boto_rds_postgres_config', 'db_instance_identifier'))
 
-    client = get_client_rds()
+    parser = get_parser()
+    parser.read('modules/pipeline.conf')
+
+    access_key = parser.get('aws_boto_credentials', 'access_key')
+    secret_key = parser.get('aws_boto_credentials', 'secret_key')
+
+    client = get_client_rds('rds', access_key, secret_key)
     db_info = client.describe_db_instances()
 
-    # load_data(
-    #     df=df_crypto,
-    #     endpoint=db_info['DBInstances'][0]['Endpoint']['Address'],
-    #     port=db_info['DBInstances'][0]['Endpoint']['Port'],
-    #     user=username,
-    #     password=password,
-    #     database=db_engine,
-    # )
+    username = parser.get('aws_boto_rds_postgres_config', 'master_username')
+    password = parser.get('aws_boto_rds_postgres_config', 'master_password')
+    db_engine = parser.get('aws_boto_rds_postgres_config', 'db_engine')
+
+    load_data(
+        df=df_crypto,
+        endpoint=db_info['DBInstances'][0]['Endpoint']['Address'],
+        port=db_info['DBInstances'][0]['Endpoint']['Port'],
+        user=username,
+        password=password,
+        database=db_engine,
+    )
 
 
 def run_instance_rds(db_instance_identifier: str):
-
-    client = get_client_rds()
+    """ Verify if an instance exists and if not then it'll create one """
 
     parser = get_parser()
     parser.read('modules/pipeline.conf')
+
+    access_key = parser.get('aws_boto_credentials', 'access_key')
+    secret_key = parser.get('aws_boto_credentials', 'secret_key')
 
     dbname = parser.get('aws_boto_rds_postgres_config', 'db_name')
     username = parser.get('aws_boto_rds_postgres_config', 'master_username')
@@ -138,10 +153,12 @@ def run_instance_rds(db_instance_identifier: str):
     db_storage = int(parser.get('aws_boto_rds_postgres_config', 'storage'))
     vpc_security_group_id = parser.get('aws_boto_rds_postgres_config', 'vpc_security_group_id')
 
+    client = get_client_rds('rds', access_key, secret_key)
+
     if check_database(client=client, database_name=db_instance_identifier):
 
         try:
-            response = client.create_db_instance(
+            client.create_db_instance(
                 AllocatedStorage=db_storage,
                 DBInstanceClass=db_instance_class,
                 DBName=dbname,
@@ -159,7 +176,7 @@ def run_instance_rds(db_instance_identifier: str):
 
         except:
             print('Error in creating a database on AWS')
-            exit(1)
+            exit(-1)
 
 
 def load_data(
@@ -170,15 +187,12 @@ def load_data(
         password='',
         database=''
 ) -> None:
-    """
-    Function that will load data into a table in AWS
-    """
+    """ Load data into a table in a RDS PostgreSQL """
 
     if check_dataframe(df):
         print('Valid dataframe. Proceed to load data')
 
     engine = f'postgresql+psycopg2://{user}:{password}@{endpoint}:{port}/{database}'
-
     sql_conn = create_engine(engine, echo=False)
 
-    df.to_sql(name='test', con=sql_conn, if_exists='append', index=False)
+    df.to_sql(name='coinmarket_api', con=sql_conn, if_exists='append', index=False)
