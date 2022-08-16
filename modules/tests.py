@@ -1,7 +1,5 @@
 def check_dataframe(df: 'pd.DataFrame') -> bool:
-    """
-    Function that takes a few tests in a dataframe
-    """
+    """ Function that takes a few tests in a dataframe """
 
     if df.empty:
         print('Dataframe is empty. Stop running')
@@ -13,10 +11,11 @@ def check_dataframe(df: 'pd.DataFrame') -> bool:
 
 def check_database(client: 'object', database_name: str) -> bool:
     """
+    Check if a database name exists in AWS RDS
 
-    :param client: AWS's instance
-    :param database_name: Database name
-    :return:
+    :param client: client instance
+    :param database_name: RDS Database name
+    :return: boolean
     """
     db_info = client.describe_db_instances()
 
